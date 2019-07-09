@@ -4,23 +4,19 @@ import sys, os
 import numpy as np
 import math
 import matplotlib.pyplot as plt
-import requests as req
+import requests
+import urllib
 
 def download_pdb(pdb_name):
-
-	xml = """<orgPdbQuery>
-
-		<queryType>org.pdb.query.simple.StructureIdQuery</queryType>
-
-		<structureIdList> """ + pdb_name + """</structureIdList>
-
-		</orgPdbQuery>"""
-	headers = {'Content-Type': 'application/xml'}
-	r = req.post('https://www.rcsb.org/pdb/rest/search', data=xml, headers=headers)
-
-	print(r.text)
-
-
+	url = 'https://files.rcsb.org/download/' + pdb_name + '.pdb'
+	r = requests.get(url)
+	print(r.status_code)
+	if r.status_code == 200:
+		with open(pdb_name + '.pdb', "w+") as f:
+			f.write(r.text)
+	else:
+		print("Error retrieving pdb file, likely due to incorrect PDB code.")
+		sys.exit(-1)
 
 def read_pdb(pdb_file):
 	if not os.path.isfile(pdb_file + ".pdb"):
