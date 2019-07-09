@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import requests
 import urllib
 
+#Download the pdb through https GET request if not in current working directory
 def download_pdb(pdb_name):
 	url = 'https://files.rcsb.org/download/' + pdb_name + '.pdb'
 	r = requests.get(url)
@@ -18,6 +19,7 @@ def download_pdb(pdb_name):
 		print("Error retrieving pdb file, likely due to incorrect PDB code.")
 		sys.exit(-1)
 
+#Read pdb file, returns two arrays, groups to calculate phi and psi
 def read_pdb(pdb_file):
 	if not os.path.isfile(pdb_file + ".pdb"):
 		print("Unable to find specified PDB file, downloading from RCSB...")
@@ -26,47 +28,57 @@ def read_pdb(pdb_file):
 	bb_atoms = []
 	phi_groups = []
 	psi_groups = []
-	bb_atom_names = ["CA", "C", "N"]
+	bb_atom_names = ["N", "CA", "C"]
 	chain = ""
 	with open(pdb_file + ".pdb") as f:
 		for line in f.read().splitlines():
+			#Record backbone atom coordinates
 			if line[0:4] == "ATOM" and line[13:17].strip() in bb_atom_names:
-				if line[20:23].strip() != chain:
+				#restarts at new chains - need?
+				new_chain = line[20:23].strip()
+				if new_chain != chain:
 					bb_atoms = []
-					chain = line[20:23].strip()
-				resn = int(line[23:27])
+					chain = new_chain
 				x = float(line[31:39])
 				y = float(line[39:47])
 				z = float(line[47:54])
 				bb_atoms.append((x, y, z))
 
+				atom_name = line[13:17].strip()
+				#Group last four added and append to corresponding group
 				if len(bb_atoms) > 3:
-					if line[13:17].strip() == "C":
+					if atom_name.strip() == "C":
 						phi_groups.append(np.array(bb_atoms[-4:]))
 						#phi_groups.append(bb_atoms[-4:])
-					if line[13:17].strip() == "N":
+					if atom_name.strip() == "N":
 						psi_groups.append(np.array(bb_atoms[-4:]))
 						#psi_groups.append(bb_atoms[-4:])
 
 	return phi_groups, psi_groups
 
-
+#Calculates dihedral given four coordinates (tuples of 3 floats)
 def calculate_angle(a1, a2, a3, a4):
-	b1 = subtract(a1, a2)
-	b2 = subtract(a2, a3)
-	b3 = subtract(a3, a4)
+	#obtain the vectors b1, b2 and b3 by vector subtraction
+	b1 = subtract(a2, a1)
+	b2 = subtract(a3, a2)
+	b3 = subtract(a4, a3)
 
+	#Compute n1 = <b1 x b2> and n2 = ⟨<b2 x b3>
+	#The angle we’re looking for is the same as the angle between n1 and n2
 	n1 = normalize(cross_product(b1, b2))
 	n2 = normalize(cross_product(b2, b3))
 
+	#m1 = n1 x <b2>
 	m1 = cross_product(n1, normalize(b2))
 
+	#Compute the coordinates of n2 in this frame: x = n1 . n2 and y = m1 . n2
 	x = dot_product(n1, n2)
 	y = dot_product(m1, n2)
 
-	return math.atan2(y, x) * 180/math.pi
+	#The dihedral angle, with the correct sign, is − atan2(y, x)
+	return -math.atan2(y, x) * 180/math.pi
 
-
+#Vector operations
 def add(v1, v2):
 	#return tuple(map(lambda x: sum(x), zip(v1, v2)))
 	return np.add(v1, v2)
@@ -94,12 +106,15 @@ def cross_product(v1, v2):
 	#return (x, y, z)
 	return np.cross(v1, v2)
 
+#iterate through groups
 def calculate_angles(coordinates):
 	angles = []
 	for coord in coordinates:
 		angles.append(calculate_angle(*coord))
 	return angles
 
+
+#draw graph, could be prettier probably
 def graph_ramachandran(name, phi_angles, psi_angles):
 	fig, ax = plt.subplots()
 	ax.scatter(phi_angles, psi_angles, marker='.')
@@ -126,7 +141,7 @@ graph_ramachandran(name, phi_angles, psi_angles)
 #
 #	1. Plot interesting subsets of residues
 #	2. Use NumPy to speed up vector arithmetic - done
-#	3. Make a combined plot of 10,000 structures
+#	3. Make a combined plot of 10,000 structures - done
 #	4. Automatically download PDB files
 #
 ##############################
