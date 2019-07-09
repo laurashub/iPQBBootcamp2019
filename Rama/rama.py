@@ -5,13 +5,11 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 import requests
-import urllib
 
 #Download the pdb through https GET request if not in current working directory
 def download_pdb(pdb_name):
 	url = 'https://files.rcsb.org/download/' + pdb_name + '.pdb'
 	r = requests.get(url)
-	print(r.status_code)
 	if r.status_code == 200:
 		with open(pdb_name + '.pdb', "w+") as f:
 			f.write(r.text)
