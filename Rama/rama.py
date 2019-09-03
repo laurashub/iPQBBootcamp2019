@@ -5,21 +5,22 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 import requests
+import argparse
 
 #Download the pdb through https GET request if not in current working directory
 def download_pdb(pdb_name):
 	url = 'https://files.rcsb.org/download/' + pdb_name + '.pdb'
 	r = requests.get(url)
 	if r.status_code == 200:
-		with open(pdb_name + '.pdb', "w+") as f:
+		with open(pdb_name, "w+") as f:
 			f.write(r.text)
 	else:
-		print("Error retrieving pdb file, likely due to incorrect PDB code.")
+		print("ERROR: Unable to retrieve pdb file, likely due to incorrect PDB code.")
 		sys.exit(-1)
 
 #Read pdb file, returns two arrays, groups to calculate phi and psi
 def read_pdb(pdb_file):
-	if not os.path.isfile(pdb_file + ".pdb"):
+	if not os.path.isfile(pdb_file):
 		print("Unable to find specified PDB file, downloading from RCSB...")
 		download_pdb(pdb_file)
 
@@ -28,18 +29,18 @@ def read_pdb(pdb_file):
 	psi_groups = []
 	bb_atom_names = ["N", "CA", "C"]
 	chain = ""
-	with open(pdb_file + ".pdb") as f:
+	with open(pdb_file) as f:
 		for line in f.read().splitlines():
 			#Record backbone atom coordinates
 			if line[0:4] == "ATOM" and line[13:17].strip() in bb_atom_names:
 				#restarts at new chains - need?
-				new_chain = line[20:23].strip()
-				if new_chain != chain:
-					bb_atoms = []
-					chain = new_chain
-				x = float(line[31:39])
-				y = float(line[39:47])
-				z = float(line[47:54])
+				#new_chain = line[20:23].strip()
+				#if new_chain != chain:
+				#	bb_atoms = []
+				#		chain = new_chain
+				x = float(line[31:38])
+				y = float(line[38:46])
+				z = float(line[46:54])
 				bb_atoms.append((x, y, z))
 
 				atom_name = line[13:17].strip()
@@ -61,7 +62,7 @@ def calculate_angle(a1, a2, a3, a4):
 	b2 = subtract(a3, a2)
 	b3 = subtract(a4, a3)
 
-	#Compute n1 = <b1 x b2> and n2 = ⟨<b2 x b3>
+	#Compute n1 = <b1 x b2> and n2 = <b2 x b3>
 	#The angle we’re looking for is the same as the angle between n1 and n2
 	n1 = normalize(cross_product(b1, b2))
 	n2 = normalize(cross_product(b2, b3))
@@ -125,22 +126,48 @@ def graph_ramachandran(name, phi_angles, psi_angles):
 	fig.tight_layout()
 	fig.savefig(name + '_rama.png', dpi=300)
 
+#deal with arguments
 if len(sys.argv[1:]) < 1:
 	print("ERROR: No PDB code specified")
 	sys.exit(-1)
 
-name = sys.argv[1].replace(".pdb", "")
-phis, psis = read_pdb(name)
-phi_angles = calculate_angles(phis)
-psi_angles = calculate_angles(psis)
-graph_ramachandran(name, phi_angles, psi_angles)
+parser = argparse.ArgumentParser(description='Input options to generate ramachandran plot')
+parser.add_argument("pdb", help="PDB file or code. If directory, use option -d")
+parser.add_argument("-d", "--directory", help="Specify directory containing multiple inputs to combine", action="store_true")
+args = parser.parse_args()
+
+#collect phi and psi groups
+mult = args.directory
+if mult:
+	if os.path.isdir(args.pdb):
+		phis, psis = [], []
+		for f in os.listdir(args.pdb):
+			new_phis, new_psis = read_pdb(args.pdb + "/" + f)
+			if len(new_phis) == len(new_psis):
+				phis += new_phis
+				psis += new_psis
+	else:
+		print("ERROR: Unable to find specified directory")
+		sys.exit(-1)
+
+#single file
+else:
+	phis, psis = read_pdb(args.pdb)
+	
+#calculate and graph
+if len(phis) != len(psis):
+	print("ERROR: Unequal sizes")
+	sys.exit(-1)
+
+phi_angles, psi_angles = calculate_angles(phis), calculate_angles(psis)
+graph_ramachandran(args.pdb.replace(".pdb", ""), phi_angles, psi_angles)
 
 ### Programming challenges ###
 #
 #	1. Plot interesting subsets of residues
 #	2. Use NumPy to speed up vector arithmetic - done
 #	3. Make a combined plot of 10,000 structures - done
-#	4. Automatically download PDB files
+#	4. Automatically download PDB files - done
 #
 ##############################
 
